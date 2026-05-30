@@ -1,3 +1,5 @@
+import sys
+import os
 import tkinter as tk
 from tkinter import ttk, simpledialog
 from pynput import keyboard, mouse
@@ -7,6 +9,91 @@ import asyncio
 import websockets
 import json
 import threading
+
+def resource_path(filename):
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, filename)
+
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+
+def settings_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+
+
+def load_settings():
+    if not os.path.exists(settings_path()):
+        return {}
+
+    try:
+        with open(settings_path(), "r", encoding="utf-8") as file:
+            return json.load(file)
+    except:
+        return {}
+
+
+def save_settings():
+    data = {
+        "username": username,
+        "icon_size": icon_size,
+        "icon_alpha": icon_alpha,
+        "icon_angle": icon_angle,
+        "show_names": show_names,
+        "selected_mode": selected_mode,
+        "room_code": room_code
+    }
+
+    with open(settings_path(), "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+
+settings_data = load_settings()
+
+username_root = tk.Tk()
+
+username_root.title("사용자 이름")
+username_root.geometry("300x120")
+username_root.attributes("-topmost", True)
+
+username = settings_data.get("username", "익명")
+
+name_var = tk.StringVar()
+name_var.set(username)
+
+
+def confirm_username():
+    global username
+
+    entered_name = name_var.get().strip()
+
+    if entered_name:
+        username = entered_name
+
+    username_root.destroy()
+
+ttk.Label(
+    username_root,
+    text="사용할 이름을 입력하세요."
+).pack(pady=(15, 5))
+
+name_entry = ttk.Entry(
+    username_root,
+    textvariable=name_var
+)
+
+name_entry.pack(padx=20, fill="x")
+name_entry.focus()
+
+ttk.Button(
+    username_root,
+    text="확인",
+    command=confirm_username
+).pack(pady=10)
+
+username_root.bind(
+    "<Return>",
+    lambda event: confirm_username()
+)
+
+username_root.mainloop()
 
 root = tk.Tk()
 
@@ -59,8 +146,6 @@ ttk.Button(
     command=select_multi
 ).pack(pady=5)
 
-root.withdraw()
-
 mode_window.wait_window()
 
 root.deiconify()
@@ -73,9 +158,10 @@ root.configure(bg="black")
 root.wm_attributes("-transparentcolor", "black")
 
 # 설정값
-icon_size = 200
-icon_alpha = 1.0
-icon_angle = 0
+icon_size = settings_data.get("icon_size", 200)
+icon_alpha = settings_data.get("icon_alpha", 1.0)
+icon_angle = settings_data.get("icon_angle", 0)
+show_names = settings_data.get("show_names", True)
 
 reset_timer = None
 current_state = "idle"
@@ -88,12 +174,12 @@ drag_start_y = 0
 other_users = {}
 other_user_labels = {}
 visible_users = {}
+other_user_names = {}
 
-username = str(id(root))
 
-idle_original = Image.open("idle.png").convert("RGBA")
-typing_original = Image.open("typing.png").convert("RGBA")
-sleep_original = Image.open("sleep.png").convert("RGBA")
+idle_original = Image.open(resource_path("idle.png")).convert("RGBA")
+typing_original = Image.open(resource_path("typing.png")).convert("RGBA")
+sleep_original = Image.open(resource_path("sleep.png")).convert("RGBA")
 
 idle_photo = None
 typing_photo = None
@@ -101,6 +187,15 @@ sleep_photo = None
 
 label = tk.Label(root, bg="black", borderwidth=0, highlightthickness=0)
 label.pack(expand=True)
+name_label = tk.Label(
+    root,
+    text=username,
+    fg="white",
+    bg="black",
+    font=("맑은 고딕", 10, "bold")
+)
+
+name_label.pack(side="bottom")
 
 
 def resize_window():
@@ -201,20 +296,41 @@ def create_other_user(user_id):
 
     index = len(other_user_labels)
 
+    frame = tk.Frame(root, bg="black")
+
     other_label = tk.Label(
-        root,
+        frame,
         image=idle_photo,
         bg="black",
         borderwidth=0,
         highlightthickness=0
     )
 
-    other_label.place(
+    other_label.pack()
+
+    other_name = tk.Label(
+        frame,
+        text=user_id,
+        fg="white",
+        bg="black",
+        font=("맑은 고딕", 9)
+    )
+
+    if show_names:
+        other_name.pack()
+
+    frame.place(
         x=30 + index * 60,
         y=30
     )
 
-    other_user_labels[user_id] = other_label
+    other_user_labels[user_id] = {
+        "frame": frame,
+        "icon": other_label
+    }
+
+    other_user_names[user_id] = other_name
+
     visible_users[user_id] = True
 
 
@@ -223,7 +339,7 @@ def update_other_user_icon(user_id, state):
     if user_id not in other_user_labels:
         create_other_user(user_id)
 
-    other_label = other_user_labels[user_id]
+    other_label = other_user_labels[user_id]["icon"]
 
     if state == "typing":
         other_label.config(image=typing_photo)
@@ -236,60 +352,111 @@ def update_other_user_icon(user_id, state):
 
 def open_settings(event=None):
     settings = tk.Toplevel(root)
-    settings.title("설정")
-    settings.geometry("300x420")
+    settings.title("설정-수정확인용")
     settings.attributes("-topmost", True)
+    settings.geometry("320x500")
+
+    canvas = tk.Canvas(settings)
+
+    scrollbar = ttk.Scrollbar(
+        settings,
+        orient="vertical",
+        command=canvas.yview
+    )
+
+    scrollable_frame = ttk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window(
+        (0, 0),
+        window=scrollable_frame,
+        anchor="nw"
+    )
+
+    canvas.configure(
+        yscrollcommand=scrollbar.set
+    )
+
+    canvas.pack(
+        side="left",
+        fill="both",
+        expand=True
+    )
+
+    scrollbar.pack(
+        side="right",
+        fill="y"
+    )
 
     size_var = tk.IntVar(value=icon_size)
     alpha_var = tk.DoubleVar(value=icon_alpha)
     angle_var = tk.IntVar(value=icon_angle)
+    name_var = tk.BooleanVar(value=show_names)
 
     def apply_settings():
-        global icon_size, icon_alpha, icon_angle
+        global icon_size, icon_alpha, icon_angle, show_names
 
         icon_size = size_var.get()
         icon_alpha = alpha_var.get()
         icon_angle = angle_var.get()
+        show_names = name_var.get()
 
         refresh_images()
+        refresh_name_visibility()
+        save_settings()
 
-    ttk.Label(settings, text="아이콘 크기").pack(pady=(10, 0))
+    ttk.Label(scrollable_frame, text="아이콘 크기").pack(pady=(10, 0))
+
     ttk.Scale(
-        settings,
+        scrollable_frame,
         from_=50,
         to=700,
         variable=size_var,
         command=lambda v: apply_settings()
     ).pack(fill="x", padx=20)
 
-    ttk.Label(settings, text="아이콘 투명도").pack(pady=(10, 0))
+    ttk.Label(scrollable_frame, text="아이콘 투명도").pack(pady=(10, 0))
+
     ttk.Scale(
-        settings,
+        scrollable_frame,
         from_=0.1,
         to=1.0,
         variable=alpha_var,
         command=lambda v: apply_settings()
     ).pack(fill="x", padx=20)
 
-    ttk.Label(settings, text="아이콘 각도").pack(pady=(10, 0))
+    ttk.Label(scrollable_frame, text="아이콘 각도").pack(pady=(10, 0))
 
     for angle in [0, 90, 180, 270]:
         ttk.Radiobutton(
-            settings,
+            scrollable_frame,
             text=f"{angle}도",
             value=angle,
             variable=angle_var,
             command=apply_settings
         ).pack()
 
-    ttk.Label(settings, text="접속 중인 사람").pack(pady=(15, 0))
+    ttk.Checkbutton(
+        scrollable_frame,
+        text="이름 표시",
+        variable=name_var,
+        command=apply_settings
+    ).pack(pady=10)
+
+    ttk.Label(scrollable_frame, text="접속 중인 사람").pack(pady=(15, 0))
 
     for user_id in other_user_labels:
 
         var = tk.BooleanVar(value=visible_users.get(user_id, True))
 
         ttk.Checkbutton(
-            settings,
+            scrollable_frame,
             text=user_id,
             variable=var,
             command=lambda user_id=user_id, var=var: toggle_other_user(
@@ -299,9 +466,9 @@ def open_settings(event=None):
         ).pack()
 
     ttk.Button(
-        settings,
+        scrollable_frame,
         text="프로그램 종료",
-        command=root.destroy
+        command=lambda: (save_settings(), root.destroy())
     ).pack(pady=15)
 
 def toggle_other_user(user_id, is_visible):
@@ -311,18 +478,34 @@ def toggle_other_user(user_id, is_visible):
     if user_id not in other_user_labels:
         return
 
-    label = other_user_labels[user_id]
+    frame = other_user_labels[user_id]["frame"]
 
     if is_visible:
         index = list(other_user_labels.keys()).index(user_id)
 
-        label.place(
+        frame.place(
             x=30 + index * 60,
             y=30
         )
 
     else:
-        label.place_forget()
+        frame.place_forget()
+
+def refresh_name_visibility():
+
+    if show_names:
+        name_label.pack(side="bottom")
+    else:
+        name_label.pack_forget()
+
+    for user_id in other_user_names:
+
+        other_name = other_user_names[user_id]
+
+        if show_names:
+            other_name.pack()
+        else:
+            other_name.pack_forget()
 
 def on_key_press(key):
     root.after(0, show_typing)
@@ -344,13 +527,14 @@ keyboard_listener.start()
 mouse_listener.start()
 
 refresh_images()
+refresh_name_visibility()
 check_sleep()
 async def connect_to_server():
 
     try:
         global room_code
 
-        uri = "ws://localhost:8765"
+        uri = "wss://typing-somsom.onrender.com"
 
         async with websockets.connect(uri) as websocket:
 
