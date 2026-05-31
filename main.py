@@ -46,6 +46,8 @@ def save_settings():
         json.dump(data, file, ensure_ascii=False, indent=4)
 
 settings_data = load_settings()
+selected_mode = settings_data.get("selected_mode", None)
+room_code = settings_data.get("room_code", None)
 
 username_root = tk.Tk()
 
@@ -103,9 +105,6 @@ mode_window = tk.Toplevel()
 mode_window.title("모드 선택")
 mode_window.geometry("250x150")
 mode_window.attributes("-topmost", True)
-
-selected_mode = None
-room_code = None
 
 
 def select_single():
@@ -506,6 +505,22 @@ def toggle_other_user(user_id, is_visible):
     else:
         window.withdraw()
 
+
+def remove_other_user(user_id):
+
+    if user_id in other_user_labels:
+        other_user_labels[user_id]["window"].destroy()
+        del other_user_labels[user_id]
+
+    if user_id in other_users:
+        del other_users[user_id]
+
+    if user_id in visible_users:
+        del visible_users[user_id]
+
+    if user_id in other_user_names:
+        del other_user_names[user_id]
+
 def refresh_name_visibility():
 
     if show_names:
@@ -578,6 +593,16 @@ async def connect_to_server():
                     )
 
                     received_data = json.loads(message)
+
+                    if received_data.get("type") == "disconnect":
+                        user_id = received_data["user"]
+
+                        root.after(
+                            0,
+                            lambda user_id=user_id: remove_other_user(user_id)
+                        )
+
+                        continue
 
                     user_id = received_data["user"]
                     state = received_data["state"]
