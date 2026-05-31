@@ -296,7 +296,14 @@ def create_other_user(user_id):
 
     index = len(other_user_labels)
 
-    frame = tk.Frame(root, bg="black")
+    user_window = tk.Toplevel(root)
+    user_window.geometry(f"+{root.winfo_x() + 80 + index * 80}+{root.winfo_y() + 80}")
+    user_window.attributes("-topmost", True)
+    user_window.overrideredirect(True)
+    user_window.configure(bg="black")
+    user_window.wm_attributes("-transparentcolor", "black")
+
+    frame = tk.Frame(user_window, bg="black")
 
     other_label = tk.Label(
         frame,
@@ -305,7 +312,6 @@ def create_other_user(user_id):
         borderwidth=0,
         highlightthickness=0
     )
-
     other_label.pack()
 
     other_name = tk.Label(
@@ -319,18 +325,33 @@ def create_other_user(user_id):
     if show_names:
         other_name.pack()
 
-    frame.place(
-        x=30 + index * 60,
-        y=30
-    )
+    frame.pack()
+
+    drag_data = {"x": 0, "y": 0}
+
+    def start_other_drag(event):
+        drag_data["x"] = event.x
+        drag_data["y"] = event.y
+
+    def drag_other_window(event):
+        new_x = user_window.winfo_x() + event.x - drag_data["x"]
+        new_y = user_window.winfo_y() + event.y - drag_data["y"]
+        user_window.geometry(f"+{new_x}+{new_y}")
+
+    frame.bind("<Button-1>", start_other_drag)
+    frame.bind("<B1-Motion>", drag_other_window)
+    other_label.bind("<Button-1>", start_other_drag)
+    other_label.bind("<B1-Motion>", drag_other_window)
+    other_name.bind("<Button-1>", start_other_drag)
+    other_name.bind("<B1-Motion>", drag_other_window)
 
     other_user_labels[user_id] = {
+        "window": user_window,
         "frame": frame,
         "icon": other_label
     }
 
     other_user_names[user_id] = other_name
-
     visible_users[user_id] = True
 
 
@@ -352,7 +373,7 @@ def update_other_user_icon(user_id, state):
 
 def open_settings(event=None):
     settings = tk.Toplevel(root)
-    settings.title("설정-수정확인용")
+    settings.title("설정")
     settings.attributes("-topmost", True)
     settings.geometry("320x500")
 
@@ -478,18 +499,12 @@ def toggle_other_user(user_id, is_visible):
     if user_id not in other_user_labels:
         return
 
-    frame = other_user_labels[user_id]["frame"]
+    window = other_user_labels[user_id]["window"]
 
     if is_visible:
-        index = list(other_user_labels.keys()).index(user_id)
-
-        frame.place(
-            x=30 + index * 60,
-            y=30
-        )
-
+        window.deiconify()
     else:
-        frame.place_forget()
+        window.withdraw()
 
 def refresh_name_visibility():
 
@@ -536,7 +551,12 @@ async def connect_to_server():
 
         uri = "wss://typing-somsom.onrender.com"
 
-        async with websockets.connect(uri) as websocket:
+        async with websockets.connect(
+             uri,
+            ping_interval=20,
+            ping_timeout=20,
+            open_timeout=60
+        ) as websocket:
 
             await websocket.send(room_code)
 
@@ -554,7 +574,7 @@ async def connect_to_server():
                 try:
                     message = await asyncio.wait_for(
                         websocket.recv(),
-                        timeout=0.1
+                        timeout=1
                     )
 
                     received_data = json.loads(message)
@@ -576,7 +596,7 @@ async def connect_to_server():
                 except asyncio.TimeoutError:
                     pass
 
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(1)
 
     except Exception as e:
         print("서버 오류:", e)
