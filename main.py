@@ -672,6 +672,9 @@ def remove_other_user(user_id):
     if user_id in other_user_names:
         del other_user_names[user_id]
 
+    if user_id in other_user_images:
+        del other_user_images[user_id]
+
 def refresh_name_visibility():
 
     if show_names:
@@ -720,7 +723,6 @@ async def send_loop(websocket):
 
         await websocket.send(json.dumps(data))
         await asyncio.sleep(0.5)
-
 
 async def receive_loop(websocket):
 
@@ -782,17 +784,4 @@ async def connect_to_server():
         except Exception as e:
             print("서버 연결 끊김, 재시도:", e)
             await asyncio.sleep(3)
-
-refresh_images()
-refresh_name_visibility()
-check_sleep()
-
-if selected_mode == "multi":
-    threading.Thread(
-        target=lambda: asyncio.run(connect_to_server()),
-        daemon=True
-    ).start()
-
-print("mainloop 진입 직전")
-print("mainloop 종료됨")
 
