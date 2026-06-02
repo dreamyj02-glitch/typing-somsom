@@ -4,6 +4,6 @@
     "icon_alpha": 1.0,
     "icon_angle": 0,
     "show_names": true,
-    "selected_mode": "single",
-    "room_code": "123456789"
+    "selected_mode": "multi",
+    "room_code": "somsom"
 }

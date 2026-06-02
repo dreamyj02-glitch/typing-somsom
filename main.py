@@ -294,12 +294,12 @@ label.pack(expand=True)
 
 print("내 이미지 로드 완료")
 
-name_label = tk.Label(
+name_canvas = tk.Label(
     root,
     text=username,
-    fg="white",
+    fg="#EAEAEA",
     bg="black",
-    font=("맑은 고딕", 10, "bold")
+    font=("맑은 고딕", 11)
 )
 
 name_label.pack(side="bottom")
@@ -431,9 +431,9 @@ def create_other_user(user_id):
     other_name = tk.Label(
         frame,
         text=user_id,
-        fg="white",
+        fg="#EAEAEA",
         bg="black",
-        font=("맑은 고딕", 9)
+        font=("맑은 고딕", 10)
     )
 
     if show_names:
@@ -678,9 +678,9 @@ def remove_other_user(user_id):
 def refresh_name_visibility():
 
     if show_names:
-        name_label.pack(side="bottom")
+        name_canvas.pack(side="bottom")
     else:
-        name_label.pack_forget()
+        name_canvas.pack_forget()
 
     for user_id in other_user_names:
 
