@@ -1,9 +1,9 @@
 {
     "username": "이테",
-    "icon_size": 110,
+    "icon_size": 148,
     "icon_alpha": 1.0,
     "icon_angle": 0,
     "show_names": true,
     "selected_mode": "single",
-    "room_code": "123456789"
+    "room_code": "somsom"
 }

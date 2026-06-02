@@ -1,0 +1,11 @@
+< 사용경로 >
+dist > main > main.exe  
+
+<닉네임>
+- 모든 닉네임 사용 가능
+- somsom 파일에 존재하지 않는 닉네임은 기본 아이콘으로 표기
+
+<somsom 추가>
+- typing-somsom > somsom 에 사용할 닉네임으로 파일 생성
+- 사용할 아이콘을 idle, typing, sleep으로 이름 설정 후 파일에 삽입
+- typing-somsom > dist > main에서 somsom 파일 덮어씌우기

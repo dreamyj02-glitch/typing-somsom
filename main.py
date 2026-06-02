@@ -16,9 +16,61 @@ def resource_path(filename):
 
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
 
-def settings_path():
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+def app_path():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
 
+    return os.path.dirname(os.path.abspath(__file__))
+
+def load_somsom_images(user_id):
+
+    user_id = user_id.strip()
+
+    print("frozen:", getattr(sys, "frozen", False))
+    print("__file__:", __file__)
+    print("sys.executable:", sys.executable)
+    print("app_path:", app_path())
+
+    somsom_folder = os.path.join(
+        app_path(),
+        "somsom",
+        user_id
+    )
+
+    print("찾는 폴더:", somsom_folder)
+
+    idle_path = os.path.join(somsom_folder, "idle.png")
+    typing_path = os.path.join(somsom_folder, "typing.png")
+    sleep_path = os.path.join(somsom_folder, "sleep.png")
+
+    print("idle 경로:", idle_path)
+    print("idle 존재:", os.path.exists(idle_path))
+    print("typing 존재:", os.path.exists(typing_path))
+    print("sleep 존재:", os.path.exists(sleep_path))
+
+    try:
+        idle = Image.open(idle_path).convert("RGBA")
+        typing = Image.open(typing_path).convert("RGBA")
+        sleep = Image.open(sleep_path).convert("RGBA")
+
+        return idle, typing, sleep
+
+    except Exception as e:
+        print("somsom 이미지 로드 실패:", e)
+        return None, None, None
+
+
+def get_user_original_images(user_id):
+
+    somsom_idle, somsom_typing, somsom_sleep = load_somsom_images(user_id)
+
+    if somsom_idle is not None:
+        return somsom_idle, somsom_typing, somsom_sleep
+
+    return idle_original, typing_original, sleep_original
+
+def settings_path():
+    return os.path.join(app_path(), "settings.json")
 
 def load_settings():
     if not os.path.exists(settings_path()):
@@ -46,20 +98,19 @@ def save_settings():
         json.dump(data, file, ensure_ascii=False, indent=4)
 
 settings_data = load_settings()
-selected_mode = settings_data.get("selected_mode", None)
-room_code = settings_data.get("room_code", None)
 
-username_root = tk.Tk()
 
-username_root.title("사용자 이름")
-username_root.geometry("300x120")
-username_root.attributes("-topmost", True)
+root = tk.Tk()
+root.withdraw()
 
 username = settings_data.get("username", "익명")
 
-name_var = tk.StringVar()
-name_var.set(username)
+username_window = tk.Toplevel(root)
+username_window.title("사용자 이름")
+username_window.geometry("300x120")
+username_window.attributes("-topmost", True)
 
+name_var = tk.StringVar(value=username)
 
 def confirm_username():
     global username
@@ -69,49 +120,84 @@ def confirm_username():
     if entered_name:
         username = entered_name
 
-    username_root.destroy()
+    username_window.destroy()
 
 ttk.Label(
-    username_root,
-    text="사용할 이름을 입력하세요."
+    username_window,
+    text="이름을 확인하거나 변경하세요."
 ).pack(pady=(15, 5))
 
 name_entry = ttk.Entry(
-    username_root,
+    username_window,
     textvariable=name_var
 )
-
 name_entry.pack(padx=20, fill="x")
 name_entry.focus()
 
 ttk.Button(
-    username_root,
+    username_window,
     text="확인",
     command=confirm_username
 ).pack(pady=10)
 
-username_root.bind(
+username_window.bind(
     "<Return>",
     lambda event: confirm_username()
 )
 
-username_root.mainloop()
+username_window.wait_window()
 
-root = tk.Tk()
+
+selected_mode = settings_data.get("selected_mode", None)
+room_code = settings_data.get("room_code", None)
+
+
+root.withdraw()
 
 # 모드 선택
-mode_window = tk.Toplevel()
+mode_window = tk.Toplevel(root)
 
 mode_window.title("모드 선택")
-mode_window.geometry("250x150")
+mode_window.geometry("250x320")
 mode_window.attributes("-topmost", True)
+
+preview_idle, _, _ = load_somsom_images(username)
+character_exists = preview_idle is not None
+
+if preview_idle is None:
+    preview_idle = Image.open(
+        resource_path("idle.png")
+    ).convert("RGBA")
+
+preview_idle = preview_idle.resize((100, 100))
+preview_photo = ImageTk.PhotoImage(preview_idle)
+
+preview_label = tk.Label(
+    mode_window,
+    image=preview_photo
+)
+preview_label.image = preview_photo
+preview_label.pack(pady=(10, 5))
+
+if not character_exists:
+    warning_label = tk.Label(
+        mode_window,
+        text="이미지가 저장되어 있지 않습니다!",
+        fg="#b1000d",
+        font=("맑은 고딕", 8, "bold")
+    )
+    warning_label.pack(pady=(0, 5))
+
+ttk.Label(
+    mode_window,
+    text="모드를 선택하세요."
+).pack(pady=(10, 8))
 
 
 def select_single():
     global selected_mode
 
     selected_mode = "single"
-
     mode_window.destroy()
 
 
@@ -122,16 +208,12 @@ def select_multi():
 
     room_code = simpledialog.askstring(
         "방 코드",
-        "방 코드를 입력하세요."
+        "방 코드를 입력하세요.",
+        parent=mode_window
     )
 
     mode_window.destroy()
 
-
-ttk.Label(
-    mode_window,
-    text="모드를 선택하세요."
-).pack(pady=15)
 
 ttk.Button(
     mode_window,
@@ -146,6 +228,9 @@ ttk.Button(
 ).pack(pady=5)
 
 mode_window.wait_window()
+
+for widget in root.winfo_children():
+    widget.destroy()
 
 root.deiconify()
 
@@ -174,11 +259,15 @@ other_users = {}
 other_user_labels = {}
 visible_users = {}
 other_user_names = {}
+other_user_images = {}
 
 
 idle_original = Image.open(resource_path("idle.png")).convert("RGBA")
 typing_original = Image.open(resource_path("typing.png")).convert("RGBA")
 sleep_original = Image.open(resource_path("sleep.png")).convert("RGBA")
+my_idle_original, my_typing_original, my_sleep_original = get_user_original_images(username)
+
+print("내 이미지 로드 완료")
 
 idle_photo = None
 typing_photo = None
@@ -186,6 +275,9 @@ sleep_photo = None
 
 label = tk.Label(root, bg="black", borderwidth=0, highlightthickness=0)
 label.pack(expand=True)
+
+print("내 이미지 로드 완료")
+
 name_label = tk.Label(
     root,
     text=username,
@@ -226,9 +318,9 @@ def refresh_images():
 
     resize_window()
 
-    idle_photo = make_image(idle_original)
-    typing_photo = make_image(typing_original)
-    sleep_photo = make_image(sleep_original)
+    idle_photo = make_image(my_idle_original)
+    typing_photo = make_image(my_typing_original)
+    sleep_photo = make_image(my_sleep_original)
 
     if current_state == "typing":
         label.config(image=typing_photo)
@@ -295,6 +387,8 @@ def create_other_user(user_id):
 
     index = len(other_user_labels)
 
+    somsom_idle, somsom_typing, somsom_sleep = load_somsom_images(user_id)
+
     user_window = tk.Toplevel(root)
     user_window.geometry(f"+{root.winfo_x() + 80 + index * 80}+{root.winfo_y() + 80}")
     user_window.attributes("-topmost", True)
@@ -350,6 +444,12 @@ def create_other_user(user_id):
         "icon": other_label
     }
 
+    other_user_images[user_id] = {
+        "idle": somsom_idle,
+        "typing": somsom_typing,
+        "sleep": somsom_sleep
+}
+
     other_user_names[user_id] = other_name
     visible_users[user_id] = True
 
@@ -361,14 +461,44 @@ def update_other_user_icon(user_id, state):
 
     other_label = other_user_labels[user_id]["icon"]
 
-    if state == "typing":
-        other_label.config(image=typing_photo)
+    images = other_user_images.get(user_id)
 
-    elif state == "sleep":
-        other_label.config(image=sleep_photo)
+    if images and images["idle"] is not None:
 
-    else:
-        other_label.config(image=idle_photo)
+        if state == "typing":
+            photo = ImageTk.PhotoImage(
+                images["typing"].resize(
+                    (icon_size, icon_size)
+                )
+            )
+
+        elif state == "sleep":
+            photo = ImageTk.PhotoImage(
+                images["sleep"].resize(
+                    (icon_size, icon_size)
+                )
+            )
+
+        else:
+            photo = ImageTk.PhotoImage(
+                images["idle"].resize(
+                    (icon_size, icon_size)
+                )
+            )
+
+        other_label.image = photo
+        other_label.config(image=photo)
+
+    else:   
+
+        if state == "typing":
+            other_label.config(image=typing_photo)
+
+        elif state == "sleep":
+            other_label.config(image=sleep_photo)
+
+        else:
+            other_label.config(image=idle_photo)
 
 def open_settings(event=None):
     settings = tk.Toplevel(root)
@@ -595,6 +725,8 @@ async def connect_to_server():
                     received_data = json.loads(message)
 
                     if received_data.get("type") == "disconnect":
+                        print("퇴장 감지:", received_data)
+                        
                         user_id = received_data["user"]
 
                         root.after(
