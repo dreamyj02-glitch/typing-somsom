@@ -24,21 +24,24 @@ async def broadcast(room_code, sender, message):
 
 
 async def handler(websocket):
-    room_code = await websocket.recv()
+    first_message = await websocket.recv()
+    first_data = json.loads(first_message)
+
+    room_code = first_data["room"]
+    username = first_data["user"]
+
+    usernames[websocket] = username
 
     if room_code not in rooms:
         rooms[room_code] = set()
 
     rooms[room_code].add(websocket)
 
-    print(f"{room_code} 방 접속")
+    print(f"{room_code} 방 접속: {username}")
 
     try:
         async for message in websocket:
             data = json.loads(message)
-
-            if "user" in data:
-                usernames[websocket] = data["user"]
 
             await broadcast(room_code, websocket, message)
 
@@ -64,7 +67,9 @@ async def main():
     async with websockets.serve(
         handler,
         "0.0.0.0",
-        port
+        port,
+        ping_interval=20,
+        ping_timeout=20
     ):
         print(f"서버 실행 중: {port}")
         await asyncio.Future()

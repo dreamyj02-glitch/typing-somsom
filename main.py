@@ -272,6 +272,9 @@ print("내 이미지 로드 완료")
 idle_photo = None
 typing_photo = None
 sleep_photo = None
+default_idle_photo = None
+default_typing_photo = None
+default_sleep_photo = None
 
 label = tk.Label(root, bg="black", borderwidth=0, highlightthickness=0)
 label.pack(expand=True)
@@ -315,6 +318,11 @@ def make_image(original):
 
 def refresh_images():
     global idle_photo, typing_photo, sleep_photo
+    global default_idle_photo, default_typing_photo, default_sleep_photo
+
+    default_idle_photo = make_image(idle_original)
+    default_typing_photo = make_image(typing_original)
+    default_sleep_photo = make_image(sleep_original)
 
     resize_window()
 
@@ -400,7 +408,7 @@ def create_other_user(user_id):
 
     other_label = tk.Label(
         frame,
-        image=idle_photo,
+        image=default_idle_photo,
         bg="black",
         borderwidth=0,
         highlightthickness=0
@@ -492,13 +500,13 @@ def update_other_user_icon(user_id, state):
     else:   
 
         if state == "typing":
-            other_label.config(image=typing_photo)
+            other_label.config(image=default_typing_photo)
 
         elif state == "sleep":
-            other_label.config(image=sleep_photo)
+            other_label.config(image=default_sleep_photo)
 
         else:
-            other_label.config(image=idle_photo)
+           other_label.config(image=default_idle_photo)
 
 def open_settings(event=None):
     settings = tk.Toplevel(root)
@@ -689,83 +697,74 @@ mouse_listener.start()
 refresh_images()
 refresh_name_visibility()
 check_sleep()
+async def send_loop(websocket):
+
+    while True:
+        data = {
+            "user": username,
+            "state": current_state
+        }
+
+        await websocket.send(json.dumps(data))
+        await asyncio.sleep(0.5)
+
+
+async def receive_loop(websocket):
+
+    while True:
+        message = await websocket.recv()
+        received_data = json.loads(message)
+
+        if received_data.get("type") == "disconnect":
+            user_id = received_data["user"]
+
+            root.after(
+                0,
+                lambda user_id=user_id: remove_other_user(user_id)
+            )
+
+            continue
+
+        user_id = received_data["user"]
+        state = received_data["state"]
+
+        if user_id != username:
+            other_users[user_id] = state
+
+            root.after(
+                0,
+                lambda user_id=user_id, state=state: update_other_user_icon(user_id, state)
+            )
+
+
 async def connect_to_server():
 
-    try:
-        global room_code
+    global room_code
 
-        uri = "wss://typing-somsom.onrender.com"
+    uri = "wss://typing-somsom.onrender.com"
 
-        async with websockets.connect(
-             uri,
-            ping_interval=20,
-            ping_timeout=20,
-            open_timeout=60
-        ) as websocket:
+    while True:
+        try:
+            async with websockets.connect(
+                uri,
+                ping_interval=20,
+                ping_timeout=20,
+                open_timeout=60
+            ) as websocket:
 
-            await websocket.send(room_code)
+                await websocket.send(json.dumps({
+                    "type": "join",
+                    "room": room_code,
+                    "user": username
+                }))
 
-            print("서버 연결 성공")
+                print("서버 연결 성공")
 
-            while True:
+                await asyncio.gather(
+                    send_loop(websocket),
+                    receive_loop(websocket)
+                )
 
-                data = {
-                    "user": username,
-                    "state": current_state
-                }
-
-                await websocket.send(json.dumps(data))
-
-                try:
-                    message = await asyncio.wait_for(
-                        websocket.recv(),
-                        timeout=1
-                    )
-
-                    received_data = json.loads(message)
-
-                    if received_data.get("type") == "disconnect":
-                        print("퇴장 감지:", received_data)
-                        
-                        user_id = received_data["user"]
-
-                        root.after(
-                            0,
-                            lambda user_id=user_id: remove_other_user(user_id)
-                        )
-
-                        continue
-
-                    user_id = received_data["user"]
-                    state = received_data["state"]
-
-                    print(user_id, state)
-
-                    if user_id != username:
-
-                        other_users[user_id] = state
-
-                        root.after(
-                            0,
-                            lambda user_id=user_id, state=state: update_other_user_icon(user_id, state)
-                        )
-
-                except asyncio.TimeoutError:
-                    pass
-
-                await asyncio.sleep(1)
-
-    except Exception as e:
-        print("서버 오류:", e)
-
-print("선택된 모드:", selected_mode)
-print("방 코드:", room_code)
-
-if selected_mode == "multi":
-
-    threading.Thread(
-        target=lambda: asyncio.run(connect_to_server()),
-        daemon=True
-    ).start()
-
-root.mainloop()
+        except Exception as e:
+            print("서버 연결 끊김, 재시도:", e)
+            await asyncio.sleep(3)
