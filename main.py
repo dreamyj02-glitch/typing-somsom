@@ -750,6 +750,7 @@ async def receive_loop(websocket):
             )
 
 
+root.mainloop()
 async def connect_to_server():
 
     global room_code
@@ -793,7 +794,5 @@ if selected_mode == "multi":
     ).start()
 
 print("mainloop 진입 직전")
-root.mainloop()
 print("mainloop 종료됨")
 
-root.mainloop()
