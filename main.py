@@ -229,6 +229,19 @@ ttk.Button(
 
 mode_window.wait_window()
 
+print("모드 선택창 종료됨")
+print("선택된 모드:", selected_mode)
+print("방 코드:", room_code)
+
+for widget in root.winfo_children():
+    widget.destroy()
+
+print("기존 위젯 삭제 완료")
+
+root.deiconify()
+
+print("root 다시 표시 완료")
+
 for widget in root.winfo_children():
     widget.destroy()
 
@@ -768,3 +781,19 @@ async def connect_to_server():
         except Exception as e:
             print("서버 연결 끊김, 재시도:", e)
             await asyncio.sleep(3)
+
+refresh_images()
+refresh_name_visibility()
+check_sleep()
+
+if selected_mode == "multi":
+    threading.Thread(
+        target=lambda: asyncio.run(connect_to_server()),
+        daemon=True
+    ).start()
+
+print("mainloop 진입 직전")
+root.mainloop()
+print("mainloop 종료됨")
+
+root.mainloop()
