@@ -299,10 +299,9 @@ name_canvas = tk.Label(
     text=username,
     fg="#EAEAEA",
     bg="black",
-    font=("맑은 고딕", 11)
+    font=("맑은 고딕", 8)
 )
 
-name_label.pack(side="bottom")
 
 
 def resize_window():
@@ -433,7 +432,7 @@ def create_other_user(user_id):
         text=user_id,
         fg="#EAEAEA",
         bg="black",
-        font=("맑은 고딕", 10)
+        font=("맑은 고딕", 8)
     )
 
     if show_names:
@@ -751,8 +750,6 @@ async def receive_loop(websocket):
                 lambda user_id=user_id, state=state: update_other_user_icon(user_id, state)
             )
 
-
-root.mainloop()
 async def connect_to_server():
 
     global room_code
@@ -784,4 +781,19 @@ async def connect_to_server():
         except Exception as e:
             print("서버 연결 끊김, 재시도:", e)
             await asyncio.sleep(3)
+
+print("선택된 모드:", selected_mode)
+
+if selected_mode == "multi":
+    print("멀티모드 진입")
+
+    threading.Thread(
+        target=lambda: asyncio.run(connect_to_server()),
+        daemon=True
+    ).start()
+
+    print("서버 스레드 시작")
+
+root.mainloop()
+
 
